@@ -38,7 +38,7 @@ def save_graph_to_img(answer_dict: dict, graph_title: str, folder_name: str, fil
     tick_label = [i for i in answer_dict]    # label of each bar
 
     plt.bar(left, height, tick_label=tick_label, width=0.8, color='#98ffa9')  # plot bar graph
-    plt.title(graph_title)  #graph title
+    plt.title(graph_title)  # graph title
     plt.xticks(fontsize=9, rotation=45, ha='right', wrap=True)  # adjusting x-axis labels
     plt.tight_layout()  # adjusting graph layout to tight borders
 
@@ -122,14 +122,14 @@ def process_matrix(matrix: np.matrix, tutor_name: str):
     for i in range(1, (data_rows - NUMBER_OF_SELF_EVALUATION_QUESTIONS)):
         print(f'{CATEGORY}: {matrix[i][0]}')
         print(PROCESSING)
-        student = re.findall(r'\[(.+?)\]', matrix[i][0])
+        student = re.findall(r'\[(.+?)]', matrix[i][0])
         if student:
             # Perguntas do grid
             if student[0] not in student_list:
                 student_list.append(*student)
                 create_directory(f'{RESULT_DIR_NAME}/{student[0]}')
             sorted_info = list_to_occurrences_dict(matrix[i][1:])
-            save_graph_to_img(sorted_info, matrix[i][0], student[0], i)
+            save_graph_to_img(sorted_info, matrix[i][0], student[0], f'{i}')
         else:
             # Avaliação individual por texto
             if matrix[i][0] in student_list:
@@ -138,7 +138,7 @@ def process_matrix(matrix: np.matrix, tutor_name: str):
             elif 'tutor' in matrix[i][0]:
                 if 172 <= i <= 174:
                     sorted_info = list_to_occurrences_dict(matrix[i][1:])
-                    save_graph_to_img(sorted_info, matrix[i][0], tutor_name, i)
+                    save_graph_to_img(sorted_info, matrix[i][0], tutor_name, f'{i}')
                 else:
                     save_answers_in_txt(matrix[i][1:], tutor_name, f'{i}')
             # Outras avaliações
@@ -147,7 +147,7 @@ def process_matrix(matrix: np.matrix, tutor_name: str):
                     save_answers_in_txt(matrix[i][1:], DATA_FOR_ALL_DIR_NAME, f'{i}')
                 else:
                     sorted_info = list_to_occurrences_dict(matrix[i][1:])
-                    save_graph_to_img(sorted_info, matrix[i][0], DATA_FOR_ALL_DIR_NAME, i)
+                    save_graph_to_img(sorted_info, matrix[i][0], DATA_FOR_ALL_DIR_NAME, f'{i}')
         print(DONE)
 
 
