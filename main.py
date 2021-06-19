@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import re
-from collections import Counter
 
 
 def organize_info(info):
@@ -35,12 +34,12 @@ def draw_graph(organized_data, graph_title, folder_name, img_name):
     plt.tight_layout()
 
     # saving graph and clearing the figure for the next graph
-    plt.savefig(f'{folder_name}/{img_name}.png', bbox_inches='tight')
+    plt.savefig(f'resultados/{folder_name}/{img_name}.png', bbox_inches='tight')
     plt.clf()
 
 
-def get_data_matrix():
-    data_frame = pd.read_csv('AvalAbr21.csv')
+def get_data_matrix(file_name):
+    data_frame = pd.read_csv(file_name)
     data_object = data_frame.to_dict()
     data_label = np.array([*data_object]).transpose()
     data_object_array = data_object.values()
@@ -54,7 +53,7 @@ def get_data_matrix():
 
 def save_texts(text_array, folder_name, file_name):
     np.random.shuffle(text_array)
-    f = open(f'{folder_name}/{file_name}.txt', "w")
+    f = open(f'resultados/{folder_name}/{file_name}.txt', "w")
     for i in range(len(text_array)):
         f.write(f'Avaliação {i + 1}\n')
         f.write(text_array[i])
@@ -62,16 +61,33 @@ def save_texts(text_array, folder_name, file_name):
     f.close()
 
 
+def check_extension(file_name):
+    if len(file_name.split(".")) == 1:
+        file_name += ".csv"
+
+    return file_name
+
+
+def create_directory(directory_name):
+    if not os.path.exists(directory_name):
+        os.mkdir(directory_name)
+
+
 if __name__ == '__main__':
-    data = get_data_matrix()
+    create_directory('resultados')
+
+    tutor_name = input('Insira o nome do(a) tutor(a): ')
+    create_directory(f'resultados/{tutor_name}')
+
+    create_directory('resultados/Everybody')
+
+    file_name = input('Insira o nome do arquivo: ')
+    file_name = check_extension(file_name)
+
+    data = get_data_matrix(file_name)
     dataRows = len(data)
     currentStudents = 10
     petianeList = []
-
-    if not os.path.exists('Erika'):
-        os.mkdir('Erika')
-    if not os.path.exists('Everybody'):
-        os.mkdir('Everybody')
 
     for i in range(1, (dataRows - 4)):
         print(f'\033[1;37mCategoria: {data[i][0]}')
@@ -81,8 +97,7 @@ if __name__ == '__main__':
             # Perguntas do grid
             if petiane[0] not in petianeList:
                 petianeList.append(*petiane)
-                if not os.path.exists(petiane[0]):
-                    os.mkdir(petiane[0])
+                create_directory(f'resultados/{petiane[0]}')
             sorted_info = organize_info(data[i][1:])
             draw_graph(sorted_info, data[i][0], petiane[0], i)
         else:
