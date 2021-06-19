@@ -14,28 +14,28 @@ DONE = '\033[1;32m\tConcluído\n'
 ALL_DONE = '\033[1;30;42mTudo feito e pasteurizado\033[m'
 
 
-def organize_info(info: list) -> dict:
+def list_to_occurrences_dict(answer_list: list) -> dict:
     """ Transform the list of answers in a dictionary with the occurrences of each answer
     Example: ['a', 'd', 'b', 'a', 'b', 'b', 'c'] -> {a: 2, b: 3, c: 1, d: 1}
-    :param info: list of answers
+    :param answer_list: list of answers
     :return: a dictionary with all the occurrences of each answer
     """
-    unique, counts = np.unique(info, return_counts=True)
-    dict_info = dict(zip(unique, counts))
-    return dict_info
+    unique, counts = np.unique(answer_list, return_counts=True)
+    answer_dict = dict(zip(unique, counts))
+    return answer_dict
 
 
-def save_graph(organized_data: dict, graph_title: str, folder_name: str, file_name: str):
+def save_graph_to_img(answer_dict: dict, graph_title: str, folder_name: str, file_name: str):
     """Create and save a graph based on the data given
-    :param organized_data: dictionary with the data
+    :param answer_dict: dictionary with the data
     :param graph_title: the title of the graph
     :param folder_name: name of the dir where the file will be saved
     :param file_name: name of the file to be saved
     :return: void
     """
-    left = [i for i in range(len(organized_data))]  # x-coordinates of the left side of each bar
-    height = [organized_data.get(i) for i in organized_data]    # height of each bar
-    tick_label = [i for i in organized_data]    # label of each bar
+    left = [i for i in range(len(answer_dict))]  # x-coordinates of the left side of each bar
+    height = [answer_dict.get(i) for i in answer_dict]    # height of each bar
+    tick_label = [i for i in answer_dict]    # label of each bar
 
     plt.bar(left, height, tick_label=tick_label, width=0.8, color='#98ffa9')  # plot bar graph
     plt.title(graph_title)  #graph title
@@ -47,46 +47,58 @@ def save_graph(organized_data: dict, graph_title: str, folder_name: str, file_na
     plt.clf()
 
 
-def get_data_matrix(file_name: str) -> np.matrix:
+def csv_to_matrix(file_name: str) -> np.matrix:
     """Create a matrix with all the data given in the '.csv' file
+    The conversion process is:
+        .csv -> data frame
+        data frame -> dict(dict)
+        dict(dict) -> array(dict)
+        array(dict) -> array(array)
     :param file_name: name of the '.csv' file
     :return: numpy matrix with all the data organized
     """
     data_frame = pd.read_csv(file_name)
-    data_object = data_frame.to_dict()
-    data_label = np.array([*data_object]).transpose()
-    data_object_array = data_object.values()
-    data_values = []
-    for obj in data_object_array:
-        data_values.append([*obj.values()])
-    final_matrix = np.c_[data_label, data_values]
+    data_frame_dict = data_frame.to_dict()
+    data_label_matrix = np.array([*data_frame_dict]).transpose()
+    data_frame_array = data_frame_dict.values()
+    data_values_matrix = []
+    for obj in data_frame_array:
+        data_values_matrix.append([*obj.values()])
+    final_matrix = np.c_[data_label_matrix, data_values_matrix]
 
     return final_matrix
 
 
-def save_texts(text_array: np.array_str, folder_name: str, file_name: str):
+def save_answers_in_txt(answer_array: np.array_str, folder_name: str, file_name: str):
     """Save all the answers of a question in one '.txt' file
-    :param text_array: numpy array with all the answers to the question
+    :param answer_array: numpy array with all the answers to the question
     :param folder_name: name of the dir where the file will be saved
     :param file_name: name of the file to be saved
     :return: void
     """
-    np.random.shuffle(text_array)   # randomize the answer's order to hamper identification
+    np.random.shuffle(answer_array)   # randomize the answer's order to hamper identification
     file = open(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.txt', "w")
-    for i in range(len(text_array)):
-        file.write(f'Avaliação {i + 1}\n{text_array[i]}\n\n')
+    for i in range(len(answer_array)):
+        file.write(f'Avaliação {i + 1}\n{answer_array[i]}\n\n')
     file.close()
 
 
-def check_extension(raw_file_name: str) -> str:
-    """Check if the file name given has the '.csv' extension. If not, give the extension to the file
+def has_extension(raw_file_name: str) -> bool:
+    """Check if the file name given has an extension
     :param raw_file_name: file's name
-    :return: file name with guaranteed extension
+    :return: boolean indicating if the file has the extension or not
     """
     if len(raw_file_name.split(".")) == 1:
-        raw_file_name += ".csv"
+        return False
+    return True
 
-    return raw_file_name
+
+def add_extension(raw_file_name: str) -> str:
+    """Give the '.csv' extension to the file
+    :param raw_file_name: file's name
+    :return: file with the '.csv' extension
+    """
+    return raw_file_name + ".csv"
 
 
 def create_directory(directory_name: str):
@@ -116,26 +128,26 @@ def process_matrix(matrix: np.matrix, tutor_name: str):
             if student[0] not in student_list:
                 student_list.append(*student)
                 create_directory(f'{RESULT_DIR_NAME}/{student[0]}')
-            sorted_info = organize_info(matrix[i][1:])
-            save_graph(sorted_info, matrix[i][0], student[0], i)
+            sorted_info = list_to_occurrences_dict(matrix[i][1:])
+            save_graph_to_img(sorted_info, matrix[i][0], student[0], i)
         else:
             # Avaliação individual por texto
             if matrix[i][0] in student_list:
-                save_texts(matrix[i][1:], matrix[i][0], 'avaliacao_individual')
+                save_answers_in_txt(matrix[i][1:], matrix[i][0], 'avaliacao_individual')
             # Avaliação do tutor
             elif 'tutor' in matrix[i][0]:
                 if 172 <= i <= 174:
-                    sorted_info = organize_info(matrix[i][1:])
-                    save_graph(sorted_info, matrix[i][0], tutor_name, i)
+                    sorted_info = list_to_occurrences_dict(matrix[i][1:])
+                    save_graph_to_img(sorted_info, matrix[i][0], tutor_name, i)
                 else:
-                    save_texts(matrix[i][1:], tutor_name, f'{i}')
+                    save_answers_in_txt(matrix[i][1:], tutor_name, f'{i}')
             # Outras avaliações
             else:
                 if 94 <= i <= 98 or i == 100 or i == 171:
-                    save_texts(matrix[i][1:], DATA_FOR_ALL_DIR_NAME, f'{i}')
+                    save_answers_in_txt(matrix[i][1:], DATA_FOR_ALL_DIR_NAME, f'{i}')
                 else:
-                    sorted_info = organize_info(matrix[i][1:])
-                    save_graph(sorted_info, matrix[i][0], DATA_FOR_ALL_DIR_NAME, i)
+                    sorted_info = list_to_occurrences_dict(matrix[i][1:])
+                    save_graph_to_img(sorted_info, matrix[i][0], DATA_FOR_ALL_DIR_NAME, i)
         print(DONE)
 
 
@@ -149,11 +161,12 @@ if __name__ == '__main__':
     create_directory(f'{RESULT_DIR_NAME}/{tutor}')
 
     # Get '.csv' input file
-    input_file = input('Insira o nome do arquivo: ')
-    input_file = check_extension(input_file)
+    input_file = input('Insira o nome do arquivo CSV (com ou sem a extesão): ')
+    if not has_extension(input_file):
+        input_file = add_extension(input_file)
 
     # Process all information
-    data_matrix = get_data_matrix(input_file)
+    data_matrix = csv_to_matrix(input_file)
     process_matrix(data_matrix, tutor)
 
     print(ALL_DONE)
