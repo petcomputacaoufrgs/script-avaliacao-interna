@@ -106,7 +106,7 @@ def generate_file_name(question: str) -> str:
     """
     file_name = unidecode.unidecode(question[:20])
     file_name = file_name.replace(' ', '_')
-    file_name = re.sub('[?.,/:()]', '', file_name)
+    file_name = re.sub('[?.,/:()\[\]]', '', file_name)
     return file_name
 
 
@@ -154,49 +154,35 @@ def create_directory(directory_name: str):
         print(f'\033[2;34mPasta {directory_name} criada\033[m')
 
 
-def handle_tutor_question(tutor_name: str, question_number: int, question: str, answer_list: list):
-    """ Verify if the tutor's question is multiple choice or free text answer and save it appropriately
+def is_free_text_question(question_number: int) -> bool:
+    """ Verify if the current question is free text answer
+    :param question_number: the column of the question in the csv file
+    :return: boolean indicating if is a free text answer or not
+    """
+    if 94 <= question_number <= 98 or question_number == 100 or question_number == 171 or question_number >= 175:
+        return True
+    else:
+        return False
+
+
+def get_saving_directory(question: str, tutor_name: str, student_list: list) -> [str, list]:
+    """ Get the correct directory to save the current question + answers
+    :param question: string that contains the current question
     :param tutor_name: name of the tutor
-    :param question_number: number of the question in the csv column
-    :param question: string that contains the question
-    :param answer_list: list with all the answers
-    :return: void
+    :param student_list: list of the current students found
+    :return: the name of the correct directory and the student list updated
     """
-    if 172 <= question_number <= 174:
-        answer_dict = list_to_occurrences_dict(answer_list)
-        save_graph_to_img(answer_dict, question, tutor_name)
+    if TUTOR in question:
+        return tutor_name, student_list
+    elif question in student_list:
+        return question, student_list
     else:
-        save_answers_in_txt(answer_list, tutor_name, question)
-
-
-def handle_student_multiple_choice_question(student_list: list, student_name: str, question: str, answer_list: list) -> list:
-    """ Verify if the student's question is multiple choice or free text answer and save it appropriately
-    :param student_list: list with all the current students found
-    :param student_name: name of the current student
-    :param question: string that contains the question
-    :param answer_list: list with all the answers
-    :return: updated student's list
-    """
-    if student_name not in student_list:
-        student_list.append(student_name)
-        create_directory(f'{RESULT_DIR_NAME}/{student_name}')
-    answer_dict = list_to_occurrences_dict(answer_list)
-    save_graph_to_img(answer_dict, question, student_name)
-    return student_list
-
-
-def handle_for_all_questions(question_number: int, question: str, answer_list: list):
-    """ Verify if the question is multiple choice or free text answer and save it appropriately
-    :param question_number: number of the question in the csv column
-    :param question: string that contains the question
-    :param answer_list: list with all the answers
-    :return: void
-    """
-    if 94 <= question_number <= 98 or question_number == 100 or question_number == 171:
-        save_answers_in_txt(answer_list, DATA_FOR_ALL_DIR_NAME, question)
-    else:
-        sorted_info = list_to_occurrences_dict(answer_list)
-        save_graph_to_img(sorted_info, question, DATA_FOR_ALL_DIR_NAME)
+        regex_search = re.findall(r'\[(.+?)]', question)
+        if regex_search:
+            student_list.append(regex_search[0])
+            return regex_search[0], student_list
+        else:
+            return DATA_FOR_ALL_DIR_NAME, student_list
 
 
 def process_matrix(matrix: np.matrix, tutor_name: str):
@@ -209,24 +195,19 @@ def process_matrix(matrix: np.matrix, tutor_name: str):
     student_list = []
 
     for i in range(1, (data_rows - NUMBER_OF_SELF_EVALUATION_QUESTIONS)):
-        print(f'{CATEGORY}: {matrix[i][0]}')
+        current_question = matrix[i][0]
+        print(f'{CATEGORY}: {current_question}')
         print(PROCESSING)
 
-        current_question = matrix[i][0]
-        # question for tutor
-        if TUTOR in current_question:
-            handle_tutor_question(tutor_name, i, current_question, matrix[i][1:])
-        # individual feedback for a student
-        elif current_question in student_list:
-            save_answers_in_txt(matrix[i][1:], current_question)
+        saving_directory, student_list = get_saving_directory(current_question, tutor_name, student_list)
+        create_directory(f'{RESULT_DIR_NAME}/{student_list[-1]}')
+        if current_question in student_list:
+            save_answers_in_txt(matrix[i][1:], saving_directory)
+        elif is_free_text_question(i):
+            save_answers_in_txt(matrix[i][1:], saving_directory, current_question)
         else:
-            regex_search = re.findall(r'\[(.+?)]', current_question)
-            # grid question of all students
-            if regex_search:
-                student_list = handle_student_multiple_choice_question(student_list, regex_search[0], current_question, matrix[i][1:])
-            # collective feedback
-            else:
-                handle_for_all_questions(i, current_question, matrix[i][1:])
+            answer_dict = list_to_occurrences_dict(matrix[i][1:])
+            save_graph_to_img(answer_dict, current_question, saving_directory)
         print(DONE)
 
 
