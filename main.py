@@ -4,19 +4,34 @@ import numpy as np
 import unidecode
 import os
 import re
+import shutil
 
-# import shutil
-# shutil.make_archive(output_filename, 'zip', dir_name)
+from pathlib import Path
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import smtplib
 
 # Constants
 NUMBER_OF_SELF_EVALUATION_QUESTIONS = 3
 RESULT_DIR_NAME = 'resultados'
 DATA_FOR_ALL_DIR_NAME = 'everybody'
 CATEGORY = '\033[1;37mCategoria'
+ZIPPING = '\033[1;37mZipando arquivos'
+SENDING_MAILS = '\033[1;37mMandando emails'
 PROCESSING = '\033[0;33m\tProcessando...'
 DONE = '\033[1;32m\tConcluído\n'
-ALL_DONE = '\033[1;30;42mTudo feito e pasteurizado\033[m'
+ALL_PROCESSED_N_FILED = '\033[1;30;42mDados processados e pasteurizados\033[m\n\n'
+ALL_ZIPPED = '\033[1;30;42mPastas zippadas\033[m\n\n'
+ALL_MAILS_SENT = '\033[1;30;42mEmails enviados\033[m\n\n'
 TUTOR = 'tutor'
+MAIL_CONTENT = '''Olá,
+    Segue um email teste.
+    Esse email foi mandado usando a biblioteca SMTP de Python, portanto seja bonzinhe com ele
+    Obrigada :D
+    '''
+MAIL_SUBJECT = 'Isso é um teste'
 
 
 def list_to_occurrences_dict(answer_list: list) -> dict:
@@ -149,6 +164,7 @@ def create_directory(directory_name: str):
     :param directory_name: string with the directory name
     :return: void
     """
+    directory_name = unidecode.unidecode(directory_name)
     if not os.path.exists(directory_name):
         os.mkdir(directory_name)
         print(f'\033[2;34mPasta {directory_name} criada\033[m')
@@ -179,17 +195,18 @@ def get_saving_directory(question: str, tutor_name: str, student_list: list) -> 
     else:
         regex_search = re.findall(r'\[(.+?)]', question)
         if regex_search:
-            student_list.append(regex_search[0])
+            if regex_search[0] not in student_list:
+                student_list.append(regex_search[0])
             return regex_search[0], student_list
         else:
             return DATA_FOR_ALL_DIR_NAME, student_list
 
 
-def process_matrix(matrix: np.matrix, tutor_name: str):
+def process_matrix(matrix: np.matrix, tutor_name: str) -> list:
     """ Process all the information, creating the files necessary in the right folders
     :param matrix: numpy matrix with all the data
     :param tutor_name: name of the tutor's directory (name of the tutor)
-    :return: void
+    :return: list with all students found in the evaluation
     """
     data_rows = len(matrix)
     student_list = []
@@ -210,6 +227,91 @@ def process_matrix(matrix: np.matrix, tutor_name: str):
             save_graph_to_img(answer_dict, current_question, saving_directory)
         print(DONE)
 
+    return student_list
+
+
+def zip_all_directories(directories_list: list):
+    """ Zip all the directories listed in the list of directories
+    :param directories_list: list with all the directories to be zipped
+    :return: void
+    """
+    for directory in directories_list:
+        shutil.make_archive(f'{RESULT_DIR_NAME}/{directory}', 'zip', f'{RESULT_DIR_NAME}/{directory}')
+
+
+def get_attach_file(attach_file_name):
+    attach_file = open(attach_file_name, 'rb')  # Open the file as binary mode
+    payload = MIMEBase('application', 'octate-stream')
+    payload.set_payload(attach_file.read())
+    encoders.encode_base64(payload)  # encode the attachment
+    # add payload header with filename
+    payload.add_header('Content-Disposition', 'attachment; filename="{}"'.format(Path(attach_file_name).name), filename=attach_file_name)
+    return payload
+
+
+def create_message(receiver, receiver_mail, sender_mail):
+    # Setup the MIME
+    message = MIMEMultipart()
+    message['From'] = sender_mail
+    message['To'] = receiver_mail
+    message['Subject'] = MAIL_SUBJECT
+
+    # The subject line
+    # The body and the attachments for the mail
+    message.attach(MIMEText(MAIL_CONTENT, 'plain'))
+    everybody_dir = get_attach_file(f'{RESULT_DIR_NAME}/{DATA_FOR_ALL_DIR_NAME}.zip')
+    message.attach(everybody_dir)
+    student_dir = get_attach_file(f'{RESULT_DIR_NAME}/{receiver}.zip')
+    message.attach(student_dir)
+    return message.as_string()
+
+
+def send_mail(receiver, receiver_mail, sender_information):
+    text = create_message(receiver, receiver_mail, sender_information[0])
+
+    # Create SMTP session for sending the mail
+    session = smtplib.SMTP('smtp.gmail.com', 587)  # use gmail with port
+    session.starttls()  # enable security
+    session.login(sender_information[0], sender_information[1])  # login with mail_id and password
+    session.sendmail(sender_information[0], receiver_mail, text)
+    session.quit()
+
+    print(f'Email enviado para {receiver_mail} com sucesso')
+
+
+def get_mail_addresses():
+    dictionary = dict()
+    file_name = input('Insira o nome do arquivo com a lista de emails: ')
+    file = open(f'{file_name}.txt', 'r')
+    for line in file:
+        line = line.strip('\n')
+        (key, val) = line.split(",")
+        dictionary[key] = val
+    return dictionary
+
+
+def get_sender_info():
+    sender = list()
+    file_name = input('Insira o nome do arquivo com as informações do remetente: ')
+    file = open(f'{file_name}.txt', 'r')
+    for line in file:
+        line = line.strip('\n')
+        (mail, password) = line.split(",")
+        sender.append(mail)
+        sender.append(password)
+    return sender
+
+
+def manage_mails(directories):
+    mail_adresses_dict = get_mail_addresses()
+    sender_info = get_sender_info()
+    for person in mail_adresses_dict:
+        if person in directories:
+            print(PROCESSING)
+            send_mail(person, mail_adresses_dict[person], sender_info)
+        else:
+            print(f'Nenhum diretorio com o nome {person}')
+
 
 if __name__ == '__main__':
     # create directories where the results will be stored and the 'for all' directory
@@ -227,6 +329,21 @@ if __name__ == '__main__':
 
     # process all information
     data_matrix = csv_to_matrix(input_file)
-    process_matrix(data_matrix, tutor)
+    all_students = process_matrix(data_matrix, tutor)
+    print(ALL_PROCESSED_N_FILED)
 
-    print(ALL_DONE)
+    unidecode_list = []
+    for std in all_students:
+        unidecode_list.append(unidecode.unidecode(std))
+
+    # zip each directory
+    directories = [DATA_FOR_ALL_DIR_NAME, tutor, unidecode_list]
+    print(ZIPPING)
+    print(PROCESSING)
+    zip_all_directories(directories)
+    print(ALL_ZIPPED)
+
+    # send all zipped files to mail
+    print(SENDING_MAILS)
+    manage_mails(directories)
+    print(ALL_MAILS_SENT)
