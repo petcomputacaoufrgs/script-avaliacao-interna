@@ -24,6 +24,11 @@ pip install pandas
 pip install numpy
 ```
 
+#### Unicode
+```
+pip install unicode
+```
+
 
 ## Como utilizar o script
 Para utilizar o script, basta utilizar um ambiente onde o Python esteja configurado. Usando o PyCharm, é só criar um novo projeto e substituir o arquivo `main.py` do projeto gerado pelo `main.py` desse repositório. Depois, basta dar o run e seguir as instruções :D
