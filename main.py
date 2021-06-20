@@ -1,11 +1,12 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import unidecode
 import os
 import re
 
 # Constants
-NUMBER_OF_SELF_EVALUATION_QUESTIONS = 4
+NUMBER_OF_SELF_EVALUATION_QUESTIONS = 3
 RESULT_DIR_NAME = 'resultados'
 DATA_FOR_ALL_DIR_NAME = 'everybody'
 CATEGORY = '\033[1;37mCategoria'
@@ -25,7 +26,7 @@ def list_to_occurrences_dict(answer_list: list) -> dict:
     return answer_dict
 
 
-def save_graph_to_img(answer_dict: dict, graph_title: str, folder_name: str, file_name: str):
+def save_graph_to_img(answer_dict: dict, graph_title: str, folder_name: str):
     """Create and save a graph based on the data given
     :param answer_dict: dictionary with the data
     :param graph_title: the title of the graph
@@ -33,9 +34,10 @@ def save_graph_to_img(answer_dict: dict, graph_title: str, folder_name: str, fil
     :param file_name: name of the file to be saved
     :return: void
     """
+    file_name = generate_file_name(graph_title)
     left = [i for i in range(len(answer_dict))]  # x-coordinates of the left side of each bar
-    height = [answer_dict.get(i) for i in answer_dict]    # height of each bar
-    tick_label = [i for i in answer_dict]    # label of each bar
+    height = [answer_dict.get(i) for i in answer_dict]  # height of each bar
+    tick_label = [i for i in answer_dict]  # label of each bar
 
     plt.bar(left, height, tick_label=tick_label, width=0.8, color='#98ffa9')  # plot bar graph
     plt.title(graph_title)  # graph title
@@ -49,35 +51,73 @@ def save_graph_to_img(answer_dict: dict, graph_title: str, folder_name: str, fil
 
 def csv_to_matrix(file_name: str) -> np.matrix:
     """Create a matrix with all the data given in the '.csv' file
-    The conversion process is:
-        .csv -> data frame
-        data frame -> dict(dict)
-        dict(dict) -> array(dict)
-        array(dict) -> array(array)
+            Input example: Label 1; Label 2; Label 3
+                           Value 1; Value 2; Value 3
+                           Value 4; Value 5; Value 6
+        The conversion process is:
+        1. The .csv read is converted to a data frame (data_frame),
+        a type of pandas lib that is similar to a table
+            Example:    Label 1     Label 2     Label 3
+                     0  Value 1     Value 2     Value 3
+                     1  Value 4     Value 5     Value 6
+        2. The data frame is converted to a dictionary of dictionaries (data_frame_dict)
+            Example: {'Label 1': {0: 'Value 1', 1: 'Value 4'},
+                      'Label 2': {0: 'Value 2', 1: 'Value 5'},
+                      'Label 3': {0: 'Value 3', 1: 'Value 6'}}
+        3. The dictionary now is converted in an array of dictionaries
+            Example: [{0: 'Value 1', 1: 'Value 4'},
+                      {0: 'Value 2', 1: 'Value 5'}
+                      {0: 'Value 3', 1: 'Value 6'}]
+        Notice that we lost the labels of our outer dictionary, that correspond to our questions.
+        For that reason, we use data_label_matrix to store the label an append to the final matrix later
+        4. The dictionaries inside the array are converted to array too
+            Example: [['Value 1', 'Value 4'],
+                      ['Value 2', 'Value 5'],
+                      ['Value 3', 'Value 6']]
+        In this case, the lost labels are just the row count, so we don't need to store it
+        5. Finally, we attach the questions (the labels stored in data_label_matrix) to each row
+            Example: [['Label 1', 'Value 1', 'Value 4'],
+                      ['Label 2', 'Value 2', 'Value 5'],
+                      ['Label 3', 'Value 3', 'Value 6']]
+        We use this complicated method to make sure that the answers of a question are in the row and
+        simplify the later data process
     :param file_name: name of the '.csv' file
     :return: numpy matrix with all the data organized
     """
     data_frame = pd.read_csv(file_name)
     data_frame_dict = data_frame.to_dict()
-    data_label_matrix = np.array([*data_frame_dict]).transpose()
     data_frame_array = data_frame_dict.values()
     data_values_matrix = []
     for obj in data_frame_array:
         data_values_matrix.append([*obj.values()])
+    data_label_matrix = np.array([*data_frame_dict]).transpose()
     final_matrix = np.c_[data_label_matrix, data_values_matrix]
 
     return final_matrix
 
 
-def save_answers_in_txt(answer_array: np.array_str, folder_name: str, file_name: str):
+def generate_file_name(question: str) -> str:
+    """ Create a file name based on the question
+    :param question: string containing the question
+    :return: file name generated
+    """
+    file_name = unidecode.unidecode(question[:20])
+    file_name = file_name.replace(' ', '_')
+    file_name = re.sub('[?.,/:()\[\]]', '', file_name)
+    return file_name
+
+
+def save_answers_in_txt(answer_array: np.array_str, folder_name: str, question='Avaliação Individual'):
     """Save all the answers of a question in one '.txt' file
+    :param question: the questions made
     :param answer_array: numpy array with all the answers to the question
     :param folder_name: name of the dir where the file will be saved
-    :param file_name: name of the file to be saved
     :return: void
     """
-    np.random.shuffle(answer_array)   # randomize the answer's order to hamper identification
+    file_name = generate_file_name(question)
+    np.random.shuffle(answer_array)  # randomize the answer's order to hamper identification
     file = open(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.txt', "w")
+    file.write(f'{question}\n\n')
     for i in range(len(answer_array)):
         file.write(f'Avaliação {i + 1}\n{answer_array[i]}\n\n')
     file.close()
@@ -108,6 +148,7 @@ def create_directory(directory_name: str):
     """
     if not os.path.exists(directory_name):
         os.mkdir(directory_name)
+        print(f'\033[2;34mPasta {directory_name} criada\033[m')
 
 
 def process_matrix(matrix: np.matrix, tutor_name: str):
@@ -123,31 +164,32 @@ def process_matrix(matrix: np.matrix, tutor_name: str):
         print(f'{CATEGORY}: {matrix[i][0]}')
         print(PROCESSING)
         student = re.findall(r'\[(.+?)]', matrix[i][0])
+
         if student:
             # Perguntas do grid
             if student[0] not in student_list:
                 student_list.append(*student)
                 create_directory(f'{RESULT_DIR_NAME}/{student[0]}')
             sorted_info = list_to_occurrences_dict(matrix[i][1:])
-            save_graph_to_img(sorted_info, matrix[i][0], student[0], f'{i}')
+            save_graph_to_img(sorted_info, matrix[i][0], student[0])
         else:
             # Avaliação individual por texto
             if matrix[i][0] in student_list:
-                save_answers_in_txt(matrix[i][1:], matrix[i][0], 'avaliacao_individual')
+                save_answers_in_txt(matrix[i][1:], matrix[i][0])
             # Avaliação do tutor
             elif 'tutor' in matrix[i][0]:
                 if 172 <= i <= 174:
                     sorted_info = list_to_occurrences_dict(matrix[i][1:])
-                    save_graph_to_img(sorted_info, matrix[i][0], tutor_name, f'{i}')
+                    save_graph_to_img(sorted_info, matrix[i][0], tutor_name)
                 else:
-                    save_answers_in_txt(matrix[i][1:], tutor_name, f'{i}')
+                    save_answers_in_txt(matrix[i][1:], tutor_name, matrix[i][0])
             # Outras avaliações
             else:
                 if 94 <= i <= 98 or i == 100 or i == 171:
-                    save_answers_in_txt(matrix[i][1:], DATA_FOR_ALL_DIR_NAME, f'{i}')
+                    save_answers_in_txt(matrix[i][1:], DATA_FOR_ALL_DIR_NAME, matrix[i][0])
                 else:
                     sorted_info = list_to_occurrences_dict(matrix[i][1:])
-                    save_graph_to_img(sorted_info, matrix[i][0], DATA_FOR_ALL_DIR_NAME, f'{i}')
+                    save_graph_to_img(sorted_info, matrix[i][0], DATA_FOR_ALL_DIR_NAME)
         print(DONE)
 
 
