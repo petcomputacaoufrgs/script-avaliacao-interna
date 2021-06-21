@@ -68,5 +68,6 @@ O Google tende a não permitir realizar o login pelo `smtplib`, porque ele consi
 
 
 ## Melhorias a serem feitas
-- Melhoria nos gráficos gerados *[em progresso]*
-- Melhoria nos tratamentos de erro (no momento inexistente :p)
+- Otimização no tempo de execução
+- Legendas no eixo x menos quebradas
+- Melhoria nos tratamentos de erro (no momento inexistente :p) *[em progresso]*
