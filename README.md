@@ -24,6 +24,11 @@ pip install pandas
 pip install numpy
 ```
 
+#### Seaborn
+```
+pip install seaborn
+```
+
 #### Unicode
 ```
 pip install unicode
@@ -47,9 +52,12 @@ Para utilizar o script, basta utilizar um ambiente onde o Python esteja configur
 > [email do remetente] , [senha de acesso do remetente] 
 > ```
 
+> ***Observação:** Como o script usa os nomes para criar diretórios, é indicado que todos os nomes sejam escritos sem nenhum acento ou caracter especial. Apesar disso, um tratamento prévio é feito de qualquer forma*
 
-> **Observação:** Como o script usa os nomes para criar diretórios, é indicado que todos os nomes sejam escritos sem nenhum acento ou caracter especial. Apesar disso, um tratamento prévio é feito de qualquer forma
+### Configuração no gmail
+O Google tende a não permitir realizar o login pelo `smtplib`, porque ele considera esse tipo de conexão menos segura. Para resolver isso, entre em https://www.google.com/settings/security/lesssecureapps (logado na conta do Google) e ative a opção *'Allow less secure apps'*
 
+![image](https://cms-assets.tutsplus.com/uploads/users/1885/posts/29975/image/secure_apps.png)
 
 ### Contantes importantes
 - `NUMBER_OF_SELF_EVALUATION_QUESTIONS`: indica a quantidade de perguntas na autoavaliação; essas perguntas não são processadas
