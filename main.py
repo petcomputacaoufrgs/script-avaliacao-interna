@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import seaborn as sns
 import unidecode
+import shutil
 import os
 import re
-import shutil
-
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -13,8 +13,8 @@ from email.mime.base import MIMEBase
 from email import encoders
 import smtplib
 
-# Constants
 NUMBER_OF_SELF_EVALUATION_QUESTIONS = 3
+MAX_FILE_AND_DIR_NAME_LEN = 30
 RESULT_DIR_NAME = 'resultados'
 DATA_FOR_ALL_DIR_NAME = 'everybody'
 CATEGORY = '\033[1;37mCategoria'
@@ -27,11 +27,11 @@ ALL_ZIPPED = '\033[1;30;42mPastas zippadas\033[m\n\n'
 ALL_MAILS_SENT = '\033[1;30;42mEmails enviados\033[m\n\n'
 TUTOR = 'tutor'
 MAIL_CONTENT = '''Olá,
-    Segue um email teste.
-    Esse email foi mandado usando a biblioteca SMTP de Python, portanto seja bonzinhe com ele
+    Segue o resultado da avaliação interna. 
+    Esse email foi mandado usando a biblioteca SMTP de Python, portanto seja bonzinhe com ele.
     Obrigada :D
     '''
-MAIL_SUBJECT = 'Isso é um teste'
+MAIL_SUBJECT = 'Avaliação Interna - Resultados'
 
 
 def list_to_occurrences_dict(answer_list: list) -> dict:
@@ -45,6 +45,36 @@ def list_to_occurrences_dict(answer_list: list) -> dict:
     return answer_dict
 
 
+def has_extension(raw_file_name: str) -> bool:
+    """Check if the file name given has an extension
+    :param raw_file_name: file's name
+    :return: boolean indicating if the file has the extension or not
+    """
+    if len(raw_file_name.split(".")) == 1:
+        return False
+    return True
+
+
+def add_extension(raw_file_name: str, file_extension: str) -> str:
+    """Give the file extension to the file
+    :param raw_file_name: file's name
+    :param file_extension: extension of the file
+    :return: file with the '.csv' extension
+    """
+    return raw_file_name + file_extension
+
+
+def clean_string(input_string: str) -> str:
+    """ Create a file name friendly string removing spaces and special characters
+    :param input_string: string to be cleaned
+    :return: cleaned string generated
+    """
+    output_string = unidecode.unidecode(input_string[:30])
+    output_string = output_string.replace(' ', '_')
+    output_string = re.sub('[?.,/:()\[\]]', '', output_string)
+    return output_string
+
+
 def save_graph_to_img(answer_dict: dict, graph_title: str, folder_name: str):
     """Create and save a graph based on the data given
     :param answer_dict: dictionary with the data
@@ -52,19 +82,33 @@ def save_graph_to_img(answer_dict: dict, graph_title: str, folder_name: str):
     :param folder_name: name of the dir where the file will be saved
     :return: void
     """
-    file_name = generate_file_name(graph_title)
-    left = [i for i in range(len(answer_dict))]  # x-coordinates of the left side of each bar
-    height = [answer_dict.get(i) for i in answer_dict]  # height of each bar
-    tick_label = [i for i in answer_dict]  # label of each bar
+    file_name = clean_string(graph_title)
+    fig = plt.figure(num=0, figsize=(10, 8), dpi=300)
+    sns.set_style('darkgrid')
+    x = [*answer_dict]
+    y = list(answer_dict.values())
+    sns.set_color_codes('pastel')
+    sns.barplot(x=x, y=y, palette='rocket')
+    plt.title(graph_title, wrap=True)
+    plt.xticks(rotation=35, ha='right', fontsize=6, wrap=True)
+    fig.savefig(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.png', pad_inches=4)
+    fig.clf()
 
-    plt.bar(left, height, tick_label=tick_label, width=0.8, color='#98ffa9')  # plot bar graph
-    plt.title(graph_title)  # graph title
-    plt.xticks(fontsize=9, rotation=45, ha='right', wrap=True)  # adjusting x-axis labels
-    plt.tight_layout()  # adjusting graph layout to tight borders
 
-    # saving graph and clearing the figure for the next graph
-    plt.savefig(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.png', bbox_inches='tight')
-    plt.clf()
+def save_answers_in_txt(answer_array: np.array_str, folder_name: str, question='Avaliação Individual'):
+    """Save all the answers of a question in one '.txt' file
+    :param question: the questions made
+    :param answer_array: numpy array with all the answers to the question
+    :param folder_name: name of the dir where the file will be saved
+    :return: void
+    """
+    file_name = clean_string(question)
+    np.random.shuffle(answer_array)  # randomize the answer's order to hamper identification
+    file = open(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.txt', "w")
+    file.write(f'{question}\n\n')
+    for i in range(len(answer_array)):
+        file.write(f'Avaliação {i + 1}\n{answer_array[i]}\n\n')
+    file.close()
 
 
 def csv_to_matrix(file_name: str) -> np.matrix:
@@ -114,51 +158,6 @@ def csv_to_matrix(file_name: str) -> np.matrix:
     return final_matrix
 
 
-def generate_file_name(question: str) -> str:
-    """ Create a file name based on the question
-    :param question: string containing the question
-    :return: file name generated
-    """
-    file_name = unidecode.unidecode(question[:20])
-    file_name = file_name.replace(' ', '_')
-    file_name = re.sub('[?.,/:()\[\]]', '', file_name)
-    return file_name
-
-
-def save_answers_in_txt(answer_array: np.array_str, folder_name: str, question='Avaliação Individual'):
-    """Save all the answers of a question in one '.txt' file
-    :param question: the questions made
-    :param answer_array: numpy array with all the answers to the question
-    :param folder_name: name of the dir where the file will be saved
-    :return: void
-    """
-    file_name = generate_file_name(question)
-    np.random.shuffle(answer_array)  # randomize the answer's order to hamper identification
-    file = open(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.txt', "w")
-    file.write(f'{question}\n\n')
-    for i in range(len(answer_array)):
-        file.write(f'Avaliação {i + 1}\n{answer_array[i]}\n\n')
-    file.close()
-
-
-def has_extension(raw_file_name: str) -> bool:
-    """Check if the file name given has an extension
-    :param raw_file_name: file's name
-    :return: boolean indicating if the file has the extension or not
-    """
-    if len(raw_file_name.split(".")) == 1:
-        return False
-    return True
-
-
-def add_extension(raw_file_name: str) -> str:
-    """Give the '.csv' extension to the file
-    :param raw_file_name: file's name
-    :return: file with the '.csv' extension
-    """
-    return raw_file_name + ".csv"
-
-
 def create_directory(directory_name: str):
     """Create a new directory, if it don't exist yet, with the given name
     :param directory_name: string with the directory name
@@ -168,17 +167,6 @@ def create_directory(directory_name: str):
     if not os.path.exists(directory_name):
         os.mkdir(directory_name)
         print(f'\033[2;34mPasta {directory_name} criada\033[m')
-
-
-def is_free_text_question(question_number: int) -> bool:
-    """ Verify if the current question is free text answer
-    :param question_number: the column of the question in the csv file
-    :return: boolean indicating if is a free text answer or not
-    """
-    if 94 <= question_number <= 98 or question_number == 100 or question_number == 171 or question_number >= 175:
-        return True
-    else:
-        return False
 
 
 def get_saving_directory(question: str, tutor_name: str, student_list: list) -> [str, list]:
@@ -191,15 +179,37 @@ def get_saving_directory(question: str, tutor_name: str, student_list: list) -> 
     if TUTOR in question:
         return tutor_name, student_list
     elif question in student_list:
-        return question, student_list
+        return clean_string(question), student_list
     else:
         regex_search = re.findall(r'\[(.+?)]', question)
         if regex_search:
-            if regex_search[0] not in student_list:
-                student_list.append(regex_search[0])
-            return regex_search[0], student_list
+            student = clean_string(regex_search[0])
+            if student not in student_list:
+                student_list.append(student)
+                create_directory(f'{RESULT_DIR_NAME}/{student}')
+            return student, student_list
         else:
             return DATA_FOR_ALL_DIR_NAME, student_list
+
+
+def zip_all_directories(directories_list: list):
+    """ Zip all the directories listed in the list of directories
+    :param directories_list: list with all the directories to be zipped
+    :return: void
+    """
+    for directory in directories_list:
+        shutil.make_archive(f'{RESULT_DIR_NAME}/{directory}', 'zip', f'{RESULT_DIR_NAME}/{directory}')
+
+
+def is_free_text_question(question_number: int) -> bool:
+    """ Verify if the current question is free text answer
+    :param question_number: the column of the question in the csv file
+    :return: boolean indicating if is a free text answer or not
+    """
+    if 94 <= question_number <= 98 or question_number == 100 or question_number == 171 or question_number >= 175:
+        return True
+    else:
+        return False
 
 
 def process_matrix(matrix: np.matrix, tutor_name: str) -> list:
@@ -217,7 +227,6 @@ def process_matrix(matrix: np.matrix, tutor_name: str) -> list:
         print(PROCESSING)
 
         saving_directory, student_list = get_saving_directory(current_question, tutor_name, student_list)
-        create_directory(f'{RESULT_DIR_NAME}/{student_list[-1]}')
         if current_question in student_list:
             save_answers_in_txt(matrix[i][1:], saving_directory)
         elif is_free_text_question(i):
@@ -230,22 +239,14 @@ def process_matrix(matrix: np.matrix, tutor_name: str) -> list:
     return student_list
 
 
-def zip_all_directories(directories_list: list):
-    """ Zip all the directories listed in the list of directories
-    :param directories_list: list with all the directories to be zipped
-    :return: void
-    """
-    for directory in directories_list:
-        shutil.make_archive(f'{RESULT_DIR_NAME}/{directory}', 'zip', f'{RESULT_DIR_NAME}/{directory}')
-
-
 def get_attach_file(attach_file_name):
     attach_file = open(attach_file_name, 'rb')  # Open the file as binary mode
     payload = MIMEBase('application', 'octate-stream')
     payload.set_payload(attach_file.read())
     encoders.encode_base64(payload)  # encode the attachment
     # add payload header with filename
-    payload.add_header('Content-Disposition', 'attachment; filename="{}"'.format(Path(attach_file_name).name), filename=attach_file_name)
+    payload.add_header('Content-Disposition', 'attachment; filename="{}"'.format(Path(attach_file_name).name),
+                       filename=attach_file_name)
     return payload
 
 
@@ -291,53 +292,72 @@ def get_mail_addresses():
 
 
 def get_sender_info():
-    sender = list()
     file_name = input('Insira o nome do arquivo com as informações do remetente: ')
     file = open(f'{file_name}.txt', 'r')
-    for line in file:
-        line = line.strip('\n')
-        (mail, password) = line.split(",")
-        sender.append(mail)
-        sender.append(password)
-    return sender
+    content = file.read()
+    mail, password = content.split(",")
+    return [mail, password]
 
 
-def manage_mails(directories):
-    mail_adresses_dict = get_mail_addresses()
+def manage_mails(directories_to_be_saved):
+    mail_addresses_list = get_mail_addresses()
     sender_info = get_sender_info()
-    for person in mail_adresses_dict:
-        if person in directories:
+    for person in mail_addresses_list:
+        if person in directories_to_be_saved:
             print(PROCESSING)
-            send_mail(person, mail_adresses_dict[person], sender_info)
+            send_mail(person, mail_addresses_list[person], sender_info)
         else:
             print(f'Nenhum diretorio com o nome {person}')
+
+
+def get_valid_tutor_name():
+    tutor_name = input('Insira o nome do(a) tutor(a): ')
+    while len(tutor_name) > MAX_FILE_AND_DIR_NAME_LEN:
+        tutor_name = input(f'O nome não deve ter mais do que {MAX_FILE_AND_DIR_NAME_LEN} caracteres. \nPor favor, '
+                           f'tente novamente: ')
+    tutor_name = clean_string(tutor_name)
+    return tutor_name
+
+
+def get_valid_file_name():
+    found = False
+    input_file = input('Insira o nome do arquivo CSV (com ou sem a extesão): ')
+
+    while not found:
+        if not has_extension(input_file):
+            input_file = add_extension(input_file, '.csv')
+        if os.path.exists(input_file):
+            found = True
+        else:
+            input_file = input('Arquivo não encontrado. \nPor favor, tente novamente: ')
+    return input_file
 
 
 if __name__ == '__main__':
     # create directories where the results will be stored and the 'for all' directory
     create_directory(RESULT_DIR_NAME)
     create_directory(f'{RESULT_DIR_NAME}/{DATA_FOR_ALL_DIR_NAME}')
-
+    
     # set tutor's name and create a directory for them
-    tutor = input('Insira o nome do(a) tutor(a): ')
+    tutor = get_valid_tutor_name()
     create_directory(f'{RESULT_DIR_NAME}/{tutor}')
 
     # get '.csv' input file
-    input_file = input('Insira o nome do arquivo CSV (com ou sem a extesão): ')
-    if not has_extension(input_file):
-        input_file = add_extension(input_file)
+    csv_file = get_valid_file_name()
 
     # process all information
-    data_matrix = csv_to_matrix(input_file)
+    data_matrix = csv_to_matrix(csv_file)
     all_students = process_matrix(data_matrix, tutor)
     print(ALL_PROCESSED_N_FILED)
+    print(all_students)
 
+    """
     unidecode_list = []
     for std in all_students:
-        unidecode_list.append(unidecode.unidecode(std))
+        unidecode_list.append(clean_string(std))
 
     # zip each directory
-    directories = [DATA_FOR_ALL_DIR_NAME, tutor, unidecode_list]
+    directories = [DATA_FOR_ALL_DIR_NAME, tutor, *unidecode_list]
     print(ZIPPING)
     print(PROCESSING)
     zip_all_directories(directories)
@@ -347,3 +367,4 @@ if __name__ == '__main__':
     print(SENDING_MAILS)
     manage_mails(directories)
     print(ALL_MAILS_SENT)
+    """
