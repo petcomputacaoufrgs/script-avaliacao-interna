@@ -17,14 +17,16 @@ NUMBER_OF_SELF_EVALUATION_QUESTIONS = 3
 MAX_FILE_AND_DIR_NAME_LEN = 30
 RESULT_DIR_NAME = 'resultados'
 DATA_FOR_ALL_DIR_NAME = 'everybody'
-CATEGORY = '\033[1;37mCategoria'
-ZIPPING = '\033[1;37mZipando arquivos'
-SENDING_MAILS = '\033[1;37mMandando emails'
-PROCESSING = '\033[0;33m\tProcessando...'
-DONE = '\033[1;32m\tConcluído\n'
+CATEGORY = '\033[1;37mCategoria\033[m'
+PROCESSING_DATA = '\033[1;37;46mProcessando dados\033[m'
+ZIPPING = '\033[1;37;46mZipando arquivos\033[m'
+SENDING_MAILS = '\033[1;37;46mMandando emails\033[m'
+PROCESSING = '\033[0;33m\tProcessando...\033[m'
+DONE = '\033[1;32m\tConcluído\033[m\n'
 ALL_PROCESSED_N_FILED = '\033[1;30;42mDados processados e pasteurizados\033[m\n\n'
 ALL_ZIPPED = '\033[1;30;42mPastas zippadas\033[m\n\n'
 ALL_MAILS_SENT = '\033[1;30;42mEmails enviados\033[m\n\n'
+
 TUTOR = 'tutor'
 MAIL_CONTENT = '''Olá,
     Segue o resultado da avaliação interna. 
@@ -149,12 +151,9 @@ def csv_to_matrix(file_name: str) -> np.matrix:
     data_frame = pd.read_csv(file_name)
     data_frame_dict = data_frame.to_dict()
     data_frame_array = data_frame_dict.values()
-    data_values_matrix = []
-    for obj in data_frame_array:
-        data_values_matrix.append([*obj.values()])
+    data_values_matrix = list(data_frame_array.values())
     data_label_matrix = np.array([*data_frame_dict]).transpose()
     final_matrix = np.c_[data_label_matrix, data_values_matrix]
-
     return final_matrix
 
 
@@ -239,7 +238,11 @@ def process_matrix(matrix: np.matrix, tutor_name: str) -> list:
     return student_list
 
 
-def get_attach_file(attach_file_name):
+def get_attach_file(attach_file_name: str) -> MIMEBase:
+    """ Get the file to be attached in the mail body
+    :param attach_file_name: name of the file to be attached
+    :return: a MIMEBase with the file encrypted
+    """
     attach_file = open(attach_file_name, 'rb')  # Open the file as binary mode
     payload = MIMEBase('application', 'octate-stream')
     payload.set_payload(attach_file.read())
@@ -250,7 +253,13 @@ def get_attach_file(attach_file_name):
     return payload
 
 
-def create_message(receiver, receiver_mail, sender_mail):
+def create_message(receiver: str, receiver_mail: str, sender_mail: str) -> str:
+    """ Create the mail message to be sent
+    :param receiver: receiver name string
+    :param receiver_mail: receiver mail string
+    :param sender_mail: sender mail string
+    :return: message encrypted to string
+    """
     # Setup the MIME
     message = MIMEMultipart()
     message['From'] = sender_mail
@@ -267,7 +276,13 @@ def create_message(receiver, receiver_mail, sender_mail):
     return message.as_string()
 
 
-def send_mail(receiver, receiver_mail, sender_information):
+def send_mail(receiver: str, receiver_mail: str, sender_information: list):
+    """ Send the mail generated
+    :param receiver: receiver name string
+    :param receiver_mail: receiver mail string
+    :param sender_information: list with the sender mail and password
+    :return: void
+    """
     text = create_message(receiver, receiver_mail, sender_information[0])
 
     # Create SMTP session for sending the mail
@@ -280,9 +295,12 @@ def send_mail(receiver, receiver_mail, sender_information):
     print(f'Email enviado para {receiver_mail} com sucesso')
 
 
-def get_mail_addresses():
+def get_mail_addresses() -> dict:
+    """ Get the file containing the person's name and mails
+    :return: dictionary with all person's mail to be sent
+    """
     dictionary = dict()
-    file_name = input('Insira o nome do arquivo com a lista de emails: ')
+    file_name = get_valid_file_name('Insira o nome do arquivo com a lista de emails (com ou sem extensão): ', '.txt')
     file = open(f'{file_name}.txt', 'r')
     for line in file:
         line = line.strip('\n')
@@ -291,15 +309,23 @@ def get_mail_addresses():
     return dictionary
 
 
-def get_sender_info():
-    file_name = input('Insira o nome do arquivo com as informações do remetente: ')
+def get_sender_info() -> list:
+    """ Get sender mail and password
+    :return: return the list with the sender information
+    """
+    file_name = get_valid_file_name('Insira o nome do arquivo com as informações do remetente (com ou sem extensão): ',
+                                    '.txt')
     file = open(f'{file_name}.txt', 'r')
     content = file.read()
     mail, password = content.split(",")
     return [mail, password]
 
 
-def manage_mails(directories_to_be_saved):
+def manage_mails(directories_to_be_saved: list):
+    """ Get all the mails needed and sent the zipped files to the correct address
+    :param directories_to_be_saved: list with all directories existing
+    :return: void
+    """
     mail_addresses_list = get_mail_addresses()
     sender_info = get_sender_info()
     for person in mail_addresses_list:
@@ -310,7 +336,10 @@ def manage_mails(directories_to_be_saved):
             print(f'Nenhum diretorio com o nome {person}')
 
 
-def get_valid_tutor_name():
+def get_valid_tutor_name() -> str:
+    """ Get a valid string that represent the tutor's name
+    :return: string with a valid tutor's name
+    """
     tutor_name = input('Insira o nome do(a) tutor(a): ')
     while len(tutor_name) > MAX_FILE_AND_DIR_NAME_LEN:
         tutor_name = input(f'O nome não deve ter mais do que {MAX_FILE_AND_DIR_NAME_LEN} caracteres. \nPor favor, '
@@ -319,13 +348,18 @@ def get_valid_tutor_name():
     return tutor_name
 
 
-def get_valid_file_name():
+def get_valid_file_name(message, extension) -> str:
+    """ Get a valid file name (file name that exists in the computer)
+    :param message: question soliciting the specific file needed
+    :param extension: extension of the file
+    :return: valid file name
+    """
     found = False
-    input_file = input('Insira o nome do arquivo CSV (com ou sem a extesão): ')
+    input_file = input(message)
 
     while not found:
         if not has_extension(input_file):
-            input_file = add_extension(input_file, '.csv')
+            input_file = add_extension(input_file, extension)
         if os.path.exists(input_file):
             found = True
         else:
@@ -343,21 +377,16 @@ if __name__ == '__main__':
     create_directory(f'{RESULT_DIR_NAME}/{tutor}')
 
     # get '.csv' input file
-    csv_file = get_valid_file_name()
+    csv_file = get_valid_file_name('Insira o nome do arquivo CSV com a avaliação interna(com ou sem a extesão): ', '.csv')
 
     # process all information
+    print(PROCESSING_DATA)
     data_matrix = csv_to_matrix(csv_file)
     all_students = process_matrix(data_matrix, tutor)
     print(ALL_PROCESSED_N_FILED)
-    print(all_students)
-
-    """
-    unidecode_list = []
-    for std in all_students:
-        unidecode_list.append(clean_string(std))
 
     # zip each directory
-    directories = [DATA_FOR_ALL_DIR_NAME, tutor, *unidecode_list]
+    directories = [DATA_FOR_ALL_DIR_NAME, tutor, all_students]
     print(ZIPPING)
     print(PROCESSING)
     zip_all_directories(directories)
@@ -367,4 +396,3 @@ if __name__ == '__main__':
     print(SENDING_MAILS)
     manage_mails(directories)
     print(ALL_MAILS_SENT)
-    """
