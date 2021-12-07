@@ -36,6 +36,33 @@ MAIL_CONTENT = '''Olá,
 MAIL_SUBJECT = 'Avaliação Interna - Resultados'
 
 
+def remove_emoji(string: str) -> str:
+    """ Remove emojis from string
+        Example: 😈test😈 to -> test to
+        :param string: string possibly with emoji
+        :return: a clean string, without emojis
+    """
+    emoji_pattern = re.compile("["
+                               u"\U0001F600-\U0001F64F"  # emoticons
+                               u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+                               u"\U0001F680-\U0001F6FF"  # transport & map symbols
+                               u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                               u"\U00002702-\U000027B0"
+                               u"\U000024C2-\U0001F251"
+                               u"\U0001f926-\U0001f937"
+                               u'\U00010000-\U0010ffff'
+                               u"\u200d"
+                               u"\u2640-\u2642"
+                               u"\u2600-\u2B55"
+                               u"\u23cf"
+                               u"\u23e9"
+                               u"\u231a"
+                               u"\u3030"
+                               u"\ufe0f"
+                               "]+", flags=re.UNICODE)
+    return emoji_pattern.sub(r'', string)
+
+
 def list_to_occurrences_dict(answer_list: list) -> dict:
     """ Transform the list of answers in a dictionary with the occurrences of each answer
     Example: ['a', 'd', 'b', 'a', 'b', 'b', 'c'] -> {a: 2, b: 3, c: 1, d: 1}
@@ -105,6 +132,10 @@ def save_answers_in_txt(answer_array: np.array_str, folder_name: str, question='
     :return: void
     """
     file_name = clean_string(question)
+    print(answer_array)
+    for i in range(len(answer_array)):
+        answer_array[i] = remove_emoji(answer_array[i])
+    print(answer_array)
     np.random.shuffle(answer_array)  # randomize the answer's order to hamper identification
     file = open(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.txt', "w")
     file.write(f'{question}\n\n')
@@ -151,7 +182,9 @@ def csv_to_matrix(file_name: str) -> np.matrix:
     data_frame = pd.read_csv(file_name)
     data_frame_dict = data_frame.to_dict()
     data_frame_array = data_frame_dict.values()
-    data_values_matrix = list(data_frame_array.values())
+    data_values_matrix = []
+    for obj in data_frame_array:
+        data_values_matrix.append([*obj.values()])
     data_label_matrix = np.array([*data_frame_dict]).transpose()
     final_matrix = np.c_[data_label_matrix, data_values_matrix]
     return final_matrix
@@ -371,13 +404,14 @@ if __name__ == '__main__':
     # create directories where the results will be stored and the 'for all' directory
     create_directory(RESULT_DIR_NAME)
     create_directory(f'{RESULT_DIR_NAME}/{DATA_FOR_ALL_DIR_NAME}')
-    
+
     # set tutor's name and create a directory for them
     tutor = get_valid_tutor_name()
     create_directory(f'{RESULT_DIR_NAME}/{tutor}')
 
     # get '.csv' input file
-    csv_file = get_valid_file_name('Insira o nome do arquivo CSV com a avaliação interna(com ou sem a extesão): ', '.csv')
+    csv_file = get_valid_file_name('Insira o nome do arquivo CSV com a avaliação interna(com ou sem a extesão): ',
+                                   '.csv')
 
     # process all information
     print(PROCESSING_DATA)
@@ -385,6 +419,7 @@ if __name__ == '__main__':
     all_students = process_matrix(data_matrix, tutor)
     print(ALL_PROCESSED_N_FILED)
 
+    """
     # zip each directory
     directories = [DATA_FOR_ALL_DIR_NAME, tutor, all_students]
     print(ZIPPING)
@@ -396,3 +431,4 @@ if __name__ == '__main__':
     print(SENDING_MAILS)
     manage_mails(directories)
     print(ALL_MAILS_SENT)
+    """
