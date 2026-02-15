@@ -12,21 +12,26 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 import smtplib
+import warnings
 
-NUMBER_OF_SELF_EVALUATION_QUESTIONS = 3
-MAX_FILE_AND_DIR_NAME_LEN = 30
+
+warnings.filterwarnings("ignore", message="Ignoring specified arguments")
+
+# # Define quantas colunas (contando do final para o começo) da tabela final serão ignoradas
+NUMBER_OF_IGNORED_QUESTIONS = 1
+
+MAX_FILE_AND_DIR_NAME_LEN = 60
+
 RESULT_DIR_NAME = 'resultados'
 DATA_FOR_ALL_DIR_NAME = 'everybody'
 CATEGORY = '\033[1;37mCategoria\033[m'
-PROCESSING_DATA = '\033[1;37;46mProcessando dados\033[m'
-ZIPPING = '\033[1;37;46mZipando arquivos\033[m'
-SENDING_MAILS = '\033[1;37;46mMandando emails\033[m'
+ZIPPING = '\033[1;37mZipando arquivos\033[m'
+SENDING_MAILS = '\033[1;37mMandando emails\033[m'
 PROCESSING = '\033[0;33m\tProcessando...\033[m'
 DONE = '\033[1;32m\tConcluído\033[m\n'
 ALL_PROCESSED_N_FILED = '\033[1;30;42mDados processados e pasteurizados\033[m\n\n'
 ALL_ZIPPED = '\033[1;30;42mPastas zippadas\033[m\n\n'
 ALL_MAILS_SENT = '\033[1;30;42mEmails enviados\033[m\n\n'
-
 TUTOR = 'tutor'
 MAIL_CONTENT = '''Olá,
     Segue o resultado da avaliação interna. 
@@ -35,32 +40,29 @@ MAIL_CONTENT = '''Olá,
     '''
 MAIL_SUBJECT = 'Avaliação Interna - Resultados'
 
-
-def remove_emoji(string: str) -> str:
-    """ Remove emojis from string
-        Example: 😈test😈 to -> test to
-        :param string: string possibly with emoji
-        :return: a clean string, without emojis
-    """
-    emoji_pattern = re.compile("["
-                               u"\U0001F600-\U0001F64F"  # emoticons
-                               u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-                               u"\U0001F680-\U0001F6FF"  # transport & map symbols
-                               u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-                               u"\U00002702-\U000027B0"
-                               u"\U000024C2-\U0001F251"
-                               u"\U0001f926-\U0001f937"
-                               u'\U00010000-\U0010ffff'
-                               u"\u200d"
-                               u"\u2640-\u2642"
-                               u"\u2600-\u2B55"
-                               u"\u23cf"
-                               u"\u23e9"
-                               u"\u231a"
-                               u"\u3030"
-                               u"\ufe0f"
-                               "]+", flags=re.UNICODE)
-    return emoji_pattern.sub(r'', string)
+# Aqui vão todas as questões de texto livre. Elas precisam estar exatamente iguais às do formulário, mais especificamente ao resultado no arquivo .csv
+# Se uma questão de texto livre não estiver nessa lista, o programa vai tentar criar um gráfico de barras com as respostas
+FREE_TEXT_QUESTION = ['Email address',
+                      'Email',
+                      'O quão confortável você se sente para compartilhar suas ideias com o grupo?',
+                      'O que o grupo está fazendo e deve manter?',
+                      'O que o grupo está fazendo e deve parar de fazer?',
+                      'O que o grupo não está fazendo e deveria começar a fazer?',
+                      'Como você se sente no grupo (acolhido, respeitado, isolado...)',
+                      'Voce acredita que o contato com os outros membros e os PET encontros estão ajudando na quarentena?',
+                      'Quais suas impressões sobre a liderança neste período? O que vc viu de positivo? O que poderia ser melhor?',
+                      'Sobre a atuação do(a) tutor(a) nesse último período, identifique: o que ele(a) deve começar a fazer (start)? O que ele(a) deve parar de fazer (stop)? O que ele(a) deve continuar a fazer (continue)?',
+                      'Espaço aberto para seu feedback sobre a atuação do tutor(a). Valem aspectos técnicos, pessoais, de interação ou qualquer outro que vc considere relevante, sejam positivos ou negativos.',
+                      'Como você avalia a sua participação no grupo neste último período?',
+                      'O que ajudaria você a trabalhar com maior clareza e eficiência nos projetos em que atua?',
+                      'Como eliminar o desperdício de tempo e nos mantermos engajados e focados?',
+                      'Você tem observado desperdício de tempo na sua atuação? O que mais tem dificultado seu engajamento e foco?',
+                      'Quais suas impressões gerais sobre a liderança neste período? O que vc viu de positivo? O que poderia ser melhor?',
+                      'Um comportamento coletivo que precisamos ajustar',
+                      'Um comportamento coletivo que devemos manter',
+                      'UMA ação concreta que me comprometo a realizar no próximo bimestre:',
+                      'UM comportamento que preciso melhorar:',
+                      'Minha principal contribuição neste bimestre foi:']
 
 
 def list_to_occurrences_dict(answer_list: list) -> dict:
@@ -98,9 +100,9 @@ def clean_string(input_string: str) -> str:
     :param input_string: string to be cleaned
     :return: cleaned string generated
     """
-    output_string = unidecode.unidecode(input_string[:30])
+    output_string = unidecode.unidecode(input_string[:60]).strip()
     output_string = output_string.replace(' ', '_')
-    output_string = re.sub('[?.,/:()\[\]]', '', output_string)
+    output_string = re.sub(r'[?.,/:()\[\]]', '', output_string)
     return output_string
 
 
@@ -117,9 +119,15 @@ def save_graph_to_img(answer_dict: dict, graph_title: str, folder_name: str):
     x = [*answer_dict]
     y = list(answer_dict.values())
     sns.set_color_codes('pastel')
-    sns.barplot(x=x, y=y, palette='rocket')
+    sns.barplot(x=x, y=y, palette='rocket', hue=x, legend=False)
     plt.title(graph_title, wrap=True)
     plt.xticks(rotation=35, ha='right', fontsize=6, wrap=True)
+
+    counter = 1
+    while(os.path.exists(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.png')):
+        file_name = clean_string(graph_title) + f'_{counter}'
+        counter += 1
+
     fig.savefig(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.png', pad_inches=4)
     fig.clf()
 
@@ -132,12 +140,15 @@ def save_answers_in_txt(answer_array: np.array_str, folder_name: str, question='
     :return: void
     """
     file_name = clean_string(question)
-    print(answer_array)
-    for i in range(len(answer_array)):
-        answer_array[i] = remove_emoji(answer_array[i])
-    print(answer_array)
+    
     np.random.shuffle(answer_array)  # randomize the answer's order to hamper identification
-    file = open(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.txt', "w")
+
+    counter = 1
+    while(os.path.exists(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.txt')):
+        file_name = clean_string(question) + f'_{counter}'
+        counter += 1
+
+    file = open(f'{RESULT_DIR_NAME}/{folder_name}/{file_name}.txt', "w", encoding='utf-8')
     file.write(f'{question}\n\n')
     for i in range(len(answer_array)):
         file.write(f'Avaliação {i + 1}\n{answer_array[i]}\n\n')
@@ -179,7 +190,7 @@ def csv_to_matrix(file_name: str) -> np.matrix:
     :param file_name: name of the '.csv' file
     :return: numpy matrix with all the data organized
     """
-    data_frame = pd.read_csv(file_name)
+    data_frame = pd.read_csv(file_name, encoding='utf-8-sig')
     data_frame_dict = data_frame.to_dict()
     data_frame_array = data_frame_dict.values()
     data_values_matrix = []
@@ -187,6 +198,7 @@ def csv_to_matrix(file_name: str) -> np.matrix:
         data_values_matrix.append([*obj.values()])
     data_label_matrix = np.array([*data_frame_dict]).transpose()
     final_matrix = np.c_[data_label_matrix, data_values_matrix]
+
     return final_matrix
 
 
@@ -209,19 +221,19 @@ def get_saving_directory(question: str, tutor_name: str, student_list: list) -> 
     :return: the name of the correct directory and the student list updated
     """
     if TUTOR in question:
-        return tutor_name, student_list
-    elif question in student_list:
-        return clean_string(question), student_list
+        return tutor_name
+    elif clean_string(question) in student_list:
+        create_directory(f'{RESULT_DIR_NAME}/{clean_string(question)}')
+        return clean_string(question)
     else:
         regex_search = re.findall(r'\[(.+?)]', question)
         if regex_search:
             student = clean_string(regex_search[0])
-            if student not in student_list:
-                student_list.append(student)
+            if student in student_list:
                 create_directory(f'{RESULT_DIR_NAME}/{student}')
-            return student, student_list
-        else:
-            return DATA_FOR_ALL_DIR_NAME, student_list
+                return student
+        
+        return DATA_FOR_ALL_DIR_NAME
 
 
 def zip_all_directories(directories_list: list):
@@ -233,49 +245,43 @@ def zip_all_directories(directories_list: list):
         shutil.make_archive(f'{RESULT_DIR_NAME}/{directory}', 'zip', f'{RESULT_DIR_NAME}/{directory}')
 
 
-def is_free_text_question(question_number: int) -> bool:
+def is_free_text_question(question: str) -> bool:
     """ Verify if the current question is free text answer
-    :param question_number: the column of the question in the csv file
+    :param question: string with the question
     :return: boolean indicating if is a free text answer or not
     """
-    if 94 <= question_number <= 98 or question_number == 100 or question_number == 171 or question_number >= 175:
+    if question.strip() in FREE_TEXT_QUESTION:
         return True
     else:
         return False
 
 
-def process_matrix(matrix: np.matrix, tutor_name: str) -> list:
+def process_matrix(matrix: np.matrix, tutor_name: str, student_list: list) -> list:
     """ Process all the information, creating the files necessary in the right folders
     :param matrix: numpy matrix with all the data
     :param tutor_name: name of the tutor's directory (name of the tutor)
     :return: list with all students found in the evaluation
     """
     data_rows = len(matrix)
-    student_list = []
+    
 
-    for i in range(1, (data_rows - NUMBER_OF_SELF_EVALUATION_QUESTIONS)):
+    for i in range(1, (data_rows - NUMBER_OF_IGNORED_QUESTIONS)):
         current_question = matrix[i][0]
         print(f'{CATEGORY}: {current_question}')
         print(PROCESSING)
 
-        saving_directory, student_list = get_saving_directory(current_question, tutor_name, student_list)
-        if current_question in student_list:
+        saving_directory = get_saving_directory(current_question, tutor_name, student_list)
+        if clean_string(current_question) in student_list:
             save_answers_in_txt(matrix[i][1:], saving_directory)
-        elif is_free_text_question(i):
+        elif is_free_text_question(current_question):
             save_answers_in_txt(matrix[i][1:], saving_directory, current_question)
         else:
             answer_dict = list_to_occurrences_dict(matrix[i][1:])
             save_graph_to_img(answer_dict, current_question, saving_directory)
         print(DONE)
 
-    return student_list
 
-
-def get_attach_file(attach_file_name: str) -> MIMEBase:
-    """ Get the file to be attached in the mail body
-    :param attach_file_name: name of the file to be attached
-    :return: a MIMEBase with the file encrypted
-    """
+def get_attach_file(attach_file_name):
     attach_file = open(attach_file_name, 'rb')  # Open the file as binary mode
     payload = MIMEBase('application', 'octate-stream')
     payload.set_payload(attach_file.read())
@@ -286,13 +292,7 @@ def get_attach_file(attach_file_name: str) -> MIMEBase:
     return payload
 
 
-def create_message(receiver: str, receiver_mail: str, sender_mail: str) -> str:
-    """ Create the mail message to be sent
-    :param receiver: receiver name string
-    :param receiver_mail: receiver mail string
-    :param sender_mail: sender mail string
-    :return: message encrypted to string
-    """
+def create_message(receiver, receiver_mail, sender_mail):
     # Setup the MIME
     message = MIMEMultipart()
     message['From'] = sender_mail
@@ -309,13 +309,7 @@ def create_message(receiver: str, receiver_mail: str, sender_mail: str) -> str:
     return message.as_string()
 
 
-def send_mail(receiver: str, receiver_mail: str, sender_information: list):
-    """ Send the mail generated
-    :param receiver: receiver name string
-    :param receiver_mail: receiver mail string
-    :param sender_information: list with the sender mail and password
-    :return: void
-    """
+def send_mail(receiver, receiver_mail, sender_information):
     text = create_message(receiver, receiver_mail, sender_information[0])
 
     # Create SMTP session for sending the mail
@@ -328,12 +322,9 @@ def send_mail(receiver: str, receiver_mail: str, sender_information: list):
     print(f'Email enviado para {receiver_mail} com sucesso')
 
 
-def get_mail_addresses() -> dict:
-    """ Get the file containing the person's name and mails
-    :return: dictionary with all person's mail to be sent
-    """
+def get_mail_addresses():
     dictionary = dict()
-    file_name = get_valid_file_name('Insira o nome do arquivo com a lista de emails (com ou sem extensão): ', '.txt')
+    file_name = input('Insira o nome do arquivo com a lista de emails: ')
     file = open(f'{file_name}.txt', 'r')
     for line in file:
         line = line.strip('\n')
@@ -342,23 +333,15 @@ def get_mail_addresses() -> dict:
     return dictionary
 
 
-def get_sender_info() -> list:
-    """ Get sender mail and password
-    :return: return the list with the sender information
-    """
-    file_name = get_valid_file_name('Insira o nome do arquivo com as informações do remetente (com ou sem extensão): ',
-                                    '.txt')
+def get_sender_info():
+    file_name = input('Insira o nome do arquivo com as informações do remetente: ')
     file = open(f'{file_name}.txt', 'r')
     content = file.read()
     mail, password = content.split(",")
     return [mail, password]
 
 
-def manage_mails(directories_to_be_saved: list):
-    """ Get all the mails needed and sent the zipped files to the correct address
-    :param directories_to_be_saved: list with all directories existing
-    :return: void
-    """
+def manage_mails(directories_to_be_saved):
     mail_addresses_list = get_mail_addresses()
     sender_info = get_sender_info()
     for person in mail_addresses_list:
@@ -369,10 +352,7 @@ def manage_mails(directories_to_be_saved: list):
             print(f'Nenhum diretorio com o nome {person}')
 
 
-def get_valid_tutor_name() -> str:
-    """ Get a valid string that represent the tutor's name
-    :return: string with a valid tutor's name
-    """
+def get_valid_tutor_name():
     tutor_name = input('Insira o nome do(a) tutor(a): ')
     while len(tutor_name) > MAX_FILE_AND_DIR_NAME_LEN:
         tutor_name = input(f'O nome não deve ter mais do que {MAX_FILE_AND_DIR_NAME_LEN} caracteres. \nPor favor, '
@@ -381,18 +361,37 @@ def get_valid_tutor_name() -> str:
     return tutor_name
 
 
-def get_valid_file_name(message, extension) -> str:
-    """ Get a valid file name (file name that exists in the computer)
-    :param message: question soliciting the specific file needed
-    :param extension: extension of the file
-    :return: valid file name
-    """
+def get_valid_txt_file_name():
     found = False
-    input_file = input(message)
+    input_file = input('Insira o nome do arquivo TXT (com ou sem a extesão): ')
 
     while not found:
         if not has_extension(input_file):
-            input_file = add_extension(input_file, extension)
+            input_file = add_extension(input_file, '.txt')
+        if os.path.exists(input_file):
+            found = True
+        else:
+            input_file = input('Arquivo não encontrado. \nPor favor, tente novamente: ')
+    return input_file
+
+
+def read_students_file(members_file):
+    members = []
+
+    # encoding precisa aceitar caracteres padrão do português, como ´, ~, ç, etc, por isso o 'utf-8'
+    file = open(members_file, 'r', encoding='utf-8')
+    for line in file:
+        line = line.strip('\n')
+        members.append(clean_string(line))
+    return members
+
+def get_valid_csv_file_name():
+    found = False
+    input_file = input('Insira o nome do arquivo CSV (com ou sem a extesão): ')
+
+    while not found:
+        if not has_extension(input_file):
+            input_file = add_extension(input_file, '.csv')
         if os.path.exists(input_file):
             found = True
         else:
@@ -404,31 +403,33 @@ if __name__ == '__main__':
     # create directories where the results will be stored and the 'for all' directory
     create_directory(RESULT_DIR_NAME)
     create_directory(f'{RESULT_DIR_NAME}/{DATA_FOR_ALL_DIR_NAME}')
-
+    
     # set tutor's name and create a directory for them
     tutor = get_valid_tutor_name()
     create_directory(f'{RESULT_DIR_NAME}/{tutor}')
 
     # get '.csv' input file
-    csv_file = get_valid_file_name('Insira o nome do arquivo CSV com a avaliação interna(com ou sem a extesão): ',
-                                   '.csv')
+    csv_file = get_valid_csv_file_name()
+    students_txt_file = get_valid_txt_file_name()
 
+    # get students' names from the input '.txt' file
+    students = read_students_file(students_txt_file)
+    
     # process all information
-    print(PROCESSING_DATA)
     data_matrix = csv_to_matrix(csv_file)
-    all_students = process_matrix(data_matrix, tutor)
+    process_matrix(data_matrix, tutor, students)
     print(ALL_PROCESSED_N_FILED)
 
-    """
     # zip each directory
-    directories = [DATA_FOR_ALL_DIR_NAME, tutor, all_students]
+    directories = [DATA_FOR_ALL_DIR_NAME, tutor, *students]
     print(ZIPPING)
     print(PROCESSING)
     zip_all_directories(directories)
     print(ALL_ZIPPED)
 
+
     # send all zipped files to mail
-    print(SENDING_MAILS)
-    manage_mails(directories)
-    print(ALL_MAILS_SENT)
-    """
+   # print(SENDING_MAILS)
+   # manage_mails(directories)
+   # print(ALL_MAILS_SENT)
+
