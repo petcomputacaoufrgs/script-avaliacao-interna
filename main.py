@@ -225,7 +225,6 @@ def csv_to_matrix(file_name: str, student_list: list) -> np.matrix:
     data_label_matrix = np.array([*data_frame_dict]).transpose()
     final_matrix = np.c_[data_label_matrix, data_values_matrix]
 
-
     return final_matrix
 
 
