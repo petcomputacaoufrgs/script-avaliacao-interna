@@ -70,7 +70,8 @@ O Google tende a não permitir realizar o login pelo `smtplib`, porque ele consi
 - `DATA_FOR_ALL_DIR_NAME`: indica o nome do diretório onde os gráficos e textos que serão enviados para todos serão armazenados
 - `MAIL_SUBJECT`: indica o assunto que aparecerá no email enviado
 - `MAIL_CONTENT`: indica o texto que aparecerá no corpo do email enviado
-- `FREE_TEXT_QUESTION`: lista das perguntas de texto livre. É importante que o texto das perguntas aqui seja exatamente o texto das perguntas no formulário. Usado para definir quais perguntas vão gerar um arquivo de texto (todas as de texto livre) e quais vão gerar imagens (o restante) 
+- `FREE_TEXT_QUESTION`: lista das perguntas de texto livre. É importante que o texto das perguntas aqui seja exatamente o texto das perguntas no formulário. Usado para definir quais perguntas vão gerar um arquivo de texto (todas as de texto livre) e quais vão gerar imagens (o restante)
+- `DESAMBIGUITY_QUESTIONS_FOR_STUDENTS`: Uma lista de perguntas para realizar a desambiguação em situações em que se tem colunas repetidas de alunos. A i-ésima pergunta nessa lista se tornará o nome do arquivo da i-ésima pergunta que é o nome do aluno repetido no formulário
 
 ### Guia do Desenvolvedor (Arquitetura)
 Se você vai mexer na lógica do código, aqui está como ele funciona "por baixo do capô".

@@ -1,3 +1,6 @@
+from collections import defaultdict
+import csv
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -18,6 +21,7 @@ import warnings
 warnings.filterwarnings("ignore", message="Ignoring specified arguments")
 
 # # Define quantas colunas (contando do final para o começo) da tabela final serão ignoradas
+# Aqui é só uma porque a última é a pergunta de ponto de compromisso, que só a tutora deve ver
 NUMBER_OF_IGNORED_QUESTIONS = 1
 
 MAX_FILE_AND_DIR_NAME_LEN = 60
@@ -62,7 +66,22 @@ FREE_TEXT_QUESTION = ['Email address',
                       'Um comportamento coletivo que devemos manter',
                       'UMA ação concreta que me comprometo a realizar no próximo bimestre:',
                       'UM comportamento que preciso melhorar:',
-                      'Minha principal contribuição neste bimestre foi:']
+                      'Minha principal contribuição neste bimestre foi:',
+                      "Cite UMA contribuição concreta desta pessoa neste bimestre", 
+                      "Cite UM comportamento que pode ser aprimorado.", 
+                      "Sugestão prática para o próximo bimestre."]
+
+
+# Uma lista de perguntas para realizar a desambiguação em situações em que se tem colunas repetidas de alunos.
+# Por exemplo, se tiver mais de uma seção com perguntas individuais para os alunos em que a pergunta é apenas o nome do aluno, o programa
+# não sabe sobre as seções. Mas ele mantém a ordem, então a lógica aqui é a seguinte:
+# Se tiver mais de uma questão que é apenas o nome de um aluno, o programa vai olhar para essa variável aqui e atribuirá 
+# as respostas da i-ésima questão de nome de aluno para um arquivo com nome da i-ésima questão de desambiguação
+# Por isso, é importante que a ordem das perguntas de desambiguação seja a mesma da ordem das seções de perguntas individuais para os alunos, 
+# e que a quantidade de perguntas de desambiguação seja a mesma da quantidade de seções de perguntas individuais para os alunos com o mesmo nome
+DESAMBIGUITY_QUESTIONS_FOR_STUDENTS = ["Cite UMA contribuição concreta desta pessoa neste bimestre", 
+                                       "Cite UM comportamento que pode ser aprimorado.", 
+                                       "Sugestão prática para o próximo bimestre."]
 
 
 def list_to_occurrences_dict(answer_list: list) -> dict:
@@ -155,7 +174,7 @@ def save_answers_in_txt(answer_array: np.array_str, folder_name: str, question='
     file.close()
 
 
-def csv_to_matrix(file_name: str) -> np.matrix:
+def csv_to_matrix(file_name: str, student_list: list) -> np.matrix:
     """Create a matrix with all the data given in the '.csv' file
             Input example: Label 1; Label 2; Label 3
                            Value 1; Value 2; Value 3
@@ -190,8 +209,12 @@ def csv_to_matrix(file_name: str) -> np.matrix:
     :param file_name: name of the '.csv' file
     :return: numpy matrix with all the data organized
     """
-    data_frame = pd.read_csv(file_name, encoding='utf-8-sig')
+    data_frame = read_and_desambiguate_csv(file_name, student_list)
+
+    print(data_frame.columns)
     data_frame_dict = data_frame.to_dict()
+
+    print(data_frame_dict)
     data_frame_array = data_frame_dict.values()
     data_values_matrix = []
     for obj in data_frame_array:
@@ -250,11 +273,46 @@ def is_free_text_question(question: str) -> bool:
     :param question: string with the question
     :return: boolean indicating if is a free text answer or not
     """
-    if question.strip() in FREE_TEXT_QUESTION:
+    # O regex '\[.+?\]\s*' procura por colchetes, tudo o que tem dentro, 
+    # e qualquer espaço em branco logo depois, substituindo por nada ('').
+    raw_question = re.sub(r'\[.+?\]\s*', '', question).strip()
+    
+    if raw_question in FREE_TEXT_QUESTION:
         return True
     else:
         return False
 
+
+def read_and_desambiguate_csv(caminho_arquivo: str, student_list: list) -> pd.DataFrame:
+    """ Lê o CSV ajustando os nomes dos alunos para o formato '[Nome] Pergunta' """
+    
+    with open(caminho_arquivo, mode='r', encoding='utf-8') as f:
+        leitor_csv = csv.reader(f)
+        cabecalhos_originais = next(leitor_csv)
+        
+    contagem_aparicoes = defaultdict(int)
+    cabecalhos_corrigidos = []
+
+    # Varre o cabeçalho e aplica a regra dos colchetes: se o nome da coluna for o nome de um aluno, renomeia para "[Nome do Aluno] Pergunta de desambiguação"
+    # Ex: "[João da Silva] Cite UMA contribuição concreta desta pessoa neste bimestre"
+    for coluna in cabecalhos_originais:
+        clean_coluna = clean_string(coluna)
+
+        if clean_coluna in student_list:
+            indice_pergunta = contagem_aparicoes[clean_coluna]
+            
+            novo_nome = f"[{clean_coluna}] {DESAMBIGUITY_QUESTIONS_FOR_STUDENTS[indice_pergunta]}"
+            cabecalhos_corrigidos.append(novo_nome)
+            
+            # Incrementa para que a próxima vez que o nome aparecer, pegue a próxima pergunta da lista de desambiguação
+            contagem_aparicoes[clean_coluna] += 1
+        else:
+            # Se não for nome de aluno (ex: Timestamp, Tutor, etc.), mantém igual
+            cabecalhos_corrigidos.append(coluna)
+
+    df = pd.read_csv(caminho_arquivo, header=0, names=cabecalhos_corrigidos, encoding='utf-8')
+    
+    return df
 
 def process_matrix(matrix: np.matrix, tutor_name: str, student_list: list) -> list:
     """ Process all the information, creating the files necessary in the right folders
@@ -409,14 +467,17 @@ if __name__ == '__main__':
     create_directory(f'{RESULT_DIR_NAME}/{tutor}')
 
     # get '.csv' input file
+    print("Arquivo CSV com os resultados da avaliação interna:")
     csv_file = get_valid_csv_file_name()
+    
+    print("Arquivo TXT com os nomes dos alunos (um por linha):")
     students_txt_file = get_valid_txt_file_name()
 
     # get students' names from the input '.txt' file
     students = read_students_file(students_txt_file)
     
     # process all information
-    data_matrix = csv_to_matrix(csv_file)
+    data_matrix = csv_to_matrix(csv_file, students)
     process_matrix(data_matrix, tutor, students)
     print(ALL_PROCESSED_N_FILED)
 
