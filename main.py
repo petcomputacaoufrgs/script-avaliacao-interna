@@ -83,9 +83,6 @@ DESAMBIGUITY_QUESTIONS_FOR_STUDENTS = ["Cite UMA contribuição concreta desta p
                                        "Cite UM comportamento que pode ser aprimorado.", 
                                        "Sugestão prática para o próximo bimestre."]
 
-# Variável global automática para indicar se os dados tem pergunta repetida ou não
-# Atribuição feita no processamento da matriz, não precisa ser preenchda manualmente
-DB_HAS_DUPLICATED_QUESTIONS = False
 
 def list_to_occurrences_dict(answer_list: list) -> dict:
     """ Transform the list of answers in a dictionary with the occurrences of each answer
